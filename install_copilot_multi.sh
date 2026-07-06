@@ -1128,11 +1128,12 @@ echo "  5) Install caveman (terse output mode — no key changes)"
 echo "  6) Add /nzk/bin, /nzk/appimage, /nzk/shellscripts, /nzk/executables to PATH (if not already)"
 echo "  7) Enable offline mode (skip GitHub login, use local provider)"
 echo "  8) Disable login prompt (makes copilot stop asking for login)"
+echo "  9) Re-apply existing configs (fix permissions after sudo install)"
 echo "  q) Quit"
 echo ""
 
 while :; do
-    prompt "Enter your choice [1-8]:" choice
+    prompt "Enter your choice [1-9]:" choice
     case $choice in
         1) install_copilot; break ;;
         2)
@@ -1174,6 +1175,17 @@ while :; do
             regenerate_loader
             setup_offline
             printf "%s%s%s\n" "${GREEN}  ✓ Login prompt disabled. Copilot will no longer ask for login.${NC}"
+            break
+            ;;
+        9)
+            printf "%s%s%s\n" "${YELLOW}🔧 Re-applying configs from existing models...${NC}"
+            sudo chown -R "$(whoami):$(whoami)" /nzk/special/ 2>/dev/null
+            regenerate_loader
+            setup_offline
+            # Source into current session so it works immediately
+            . "$ALIASES_FILE" 2>/dev/null || true
+            printf "%s%s%s\n" "${GREEN}  ✓ Configs re-applied using existing models.${NC}"
+            printf "%s%s%s\n" "${YELLOW}  ➜ Run: source /nzk/special/aliases.sh  (if env vars not yet loaded)${NC}"
             break
             ;;
         q|Q) printf "Bye.\n"; exit 0 ;;
