@@ -417,8 +417,35 @@ setup_offline() {
         fi
     fi
 
+    # Also ensure the aliases file is sourced in shell configs
+    for cf in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile"; do
+        if [ -f "$cf" ] && ! grep -qF "$ALIASES_FILE" "$cf" 2>/dev/null; then
+            {
+                echo ""
+                echo "# Copilot loader"
+                echo ". \"${ALIASES_FILE}\""
+            } >> "$cf"
+            printf "%s%s%s\n" "${GREEN}  ✓ Added loader source to ${cf}${NC}"
+        fi
+    done
+    # Also ensure fish config sources the fish aliases
+    if $FISH_INSTALLED; then
+        fish_cfg="$HOME/.config/fish/config.fish"
+        mkdir -p "$HOME/.config/fish"
+        [ -f "$fish_cfg" ] || touch "$fish_cfg"
+        if ! grep -qF "$FISH_ALIASES" "$fish_cfg" 2>/dev/null; then
+            {
+                echo ""
+                echo "# Copilot loader"
+                echo "source \"$FISH_ALIASES\""
+            } >> "$fish_cfg"
+            printf "%s%s%s\n" "${GREEN}  ✓ Added fish loader source to ${fish_cfg}${NC}"
+        fi
+    fi
+
     printf "%s%s%s\n" "${GREEN}✅ Offline mode enabled. Copilot will skip GitHub login.${NC}"
     printf "%s%s%s\n" "${YELLOW}   Requires COPILOT_PROVIDER_BASE_URL (local model).${NC}"
+    printf "%s%s%s\n" "${YELLOW}   Run '. ~/.bashrc' or open a new terminal.${NC}"
 }
 
 # ──────────────────────────────────────────────
