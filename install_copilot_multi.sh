@@ -233,21 +233,28 @@ install_copilot() {
 choose_provider() {
     echo ""
     echo "Select a provider:"
-    echo "  1) DeepSeek    (deepseek-v4-pro / deepseek-v4-flash)"
+    echo "  0) DeepSeek    (default=deepseek-v4-flash)"
+    echo "  1) DeepSeek    (default=deepseek-v4-pro)"
     echo "  2) OpenAI      (gpt-4o, o3, etc.)"
     echo "  3) Anthropic   (claude-sonnet-4-20250514, etc.)"
     echo "  4) Google      (gemini-2.5-pro, etc.)"
     echo "  5) Custom      (enter your own)"
     echo ""
     while :; do
-        prompt "Enter your choice [1-5]:" prov_choice
+        prompt "Enter your choice [0-5]:" prov_choice
         case $prov_choice in
+            0)
+                PROVIDER_TYPE="anthropic"
+                PROVIDER_BASE_URL="https://api.deepseek.com/anthropic"
+                PROVIDER_LABEL="DeepSeek"
+                PROVIDER_MODEL="deepseek-v4-flash"
+                break
+                ;;
             1)
                 PROVIDER_TYPE="anthropic"
                 PROVIDER_BASE_URL="https://api.deepseek.com/anthropic"
                 PROVIDER_LABEL="DeepSeek"
-                prompt "Model name (Enter=deepseek-v4-pro):" PROVIDER_MODEL
-                [ -z "$PROVIDER_MODEL" ] && PROVIDER_MODEL="deepseek-v4-pro"
+                PROVIDER_MODEL="deepseek-v4-pro"
                 break
                 ;;
             2)
@@ -282,7 +289,7 @@ choose_provider() {
                 break
                 ;;
             q|Q) return 1 ;;
-            *) printf "  Invalid choice. Enter 1-5 or q to cancel.\n" ;;
+            *) printf "  Invalid choice. Enter 0-5 or q to cancel.\n" ;;
         esac
     done
 }
