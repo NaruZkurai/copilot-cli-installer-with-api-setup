@@ -13,6 +13,40 @@ FISH_LOADER="/nzk/special/loader.fish"
 FISH_ALIASES="/nzk/special/aliases.fish"
 DEFAULT_LINK="/nzk/special/default.conf"
 
+# ── Create /nzk with sticky bit (create-only, no delete) ──
+create_nzk_root() {
+    if [ ! -d "/nzk" ]; then
+        printf "%s%s%s\n" "${YELLOW}📁 Creating /nzk with sticky bit...${NC}"
+        sudo mkdir -p /nzk
+        sudo chmod 1777 /nzk
+        printf "%s%s%s\n" "${GREEN}  ✓ /nzk created with sticky bit (create-only)${NC}"
+    else
+        current_perms=$(stat -c %a /nzk 2>/dev/null || stat -f %A /nzk 2>/dev/null)
+        if [ "$current_perms" != "1777" ]; then
+            printf "%s%s%s\n" "${YELLOW}⚠️  Fixing /nzk permissions...${NC}"
+            sudo chmod 1777 /nzk
+            printf "%s%s%s\n" "${GREEN}  ✓ Sticky bit applied${NC}"
+        fi
+    fi
+}
+
+# ── Create subdirectory with sticky bit ──
+create_sticky_dir() {
+    dir="$1"
+    if [ ! -d "$dir" ]; then
+        printf "%s%s%s\n" "${YELLOW}📁 Creating ${dir}...${NC}"
+        sudo mkdir -p "$dir"
+        sudo chmod 1777 "$dir"
+        printf "%s%s%s\n" "${GREEN}  ✓ ${dir} created with sticky bit${NC}"
+    else
+        current_perms=$(stat -c %a "$dir" 2>/dev/null || stat -f %A "$dir" 2>/dev/null)
+        if [ "$current_perms" != "1777" ]; then
+            sudo chmod 1777 "$dir"
+            printf "%s%s%s\n" "${GREEN}  ✓ Sticky bit applied to ${dir}${NC}"
+        fi
+    fi
+}
+
 # ── Detect Fish shell ──
 FISH_SHELL=false
 FISH_INSTALLED=false
@@ -174,20 +208,21 @@ install_copilot() {
     # Pipe "n" to skip the installer's PATH prompt — we handle PATH ourselves
     printf "n\n" | curl -fsSL https://gh.io/copilot-install | bash
 
-    printf "%s%s%s\n" "${YELLOW}📁 Creating /nzk/bin directory...${NC}"
-    mkdir -p /nzk/bin
+    # Create /nzk with sticky bit
+    create_nzk_root
+    create_sticky_dir "/nzk/bin"
 
     printf "%s%s%s\n" "${YELLOW}📦 Moving copilot to /nzk/bin...${NC}"
     if [ -f ~/.local/bin/copilot ]; then
-        mv ~/.local/bin/copilot /nzk/bin/copilot
+        sudo mv ~/.local/bin/copilot /nzk/bin/copilot
     elif [ -f /usr/local/bin/copilot ]; then
-        mv /usr/local/bin/copilot /nzk/bin/copilot
+        sudo mv /usr/local/bin/copilot /nzk/bin/copilot
     else
         printf "%s%s%s\n" "${RED}❌ Copilot binary not found after installation!${NC}"
         printf "%s%s%s\n" "${YELLOW}   Please manually move it to /nzk/bin/copilot${NC}"
         return 1
     fi
-    chmod +x /nzk/bin/copilot
+    sudo chmod +x /nzk/bin/copilot
     printf "%s%s%s\n" "${GREEN}✅ Copilot installed at /nzk/bin/copilot${NC}"
 }
 
@@ -349,13 +384,44 @@ regenerate_loader() {
 }
 
 # ──────────────────────────────────────────────
+# Offline mode — skip GitHub login, use local provider
+# ──────────────────────────────────────────────
+
+setup_offline() {
+    printf "%s%s%s\n" "${YELLOW}🔌 Enabling offline mode (no GitHub login)...${NC}"
+
+    # Add COPILOT_OFFLINE=true to POSIX loader
+    if ! grep -qF "COPILOT_OFFLINE" "$LOADER_SCRIPT" 2>/dev/null; then
+        printf "\n# Offline mode — skip GitHub login\n" >> "$LOADER_SCRIPT"
+        printf "export COPILOT_OFFLINE=true\n" >> "$LOADER_SCRIPT"
+    fi
+    if ! grep -qF "COPILOT_OFFLINE" "$ALIASES_FILE" 2>/dev/null; then
+        printf "\nexport COPILOT_OFFLINE=true\n" >> "$ALIASES_FILE"
+    fi
+
+    # Add to Fish loader
+    if $FISH_INSTALLED || [ -f "$FISH_LOADER" ]; then
+        if ! grep -qF "COPILOT_OFFLINE" "$FISH_LOADER" 2>/dev/null; then
+            printf "\n# Offline mode\n" >> "$FISH_LOADER"
+            printf "set -gx COPILOT_OFFLINE true\n" >> "$FISH_LOADER"
+        fi
+        if ! grep -qF "COPILOT_OFFLINE" "$FISH_ALIASES" 2>/dev/null; then
+            printf "\nset -gx COPILOT_OFFLINE true\n" >> "$FISH_ALIASES"
+        fi
+    fi
+
+    printf "%s%s%s\n" "${GREEN}✅ Offline mode enabled. Copilot will skip GitHub login.${NC}"
+    printf "%s%s%s\n" "${YELLOW}   Requires COPILOT_PROVIDER_BASE_URL (local model).${NC}"
+}
+
+# ──────────────────────────────────────────────
 # Install the Copilot plugin for model management
 # ──────────────────────────────────────────────
 
 setup_plugin() {
     plugin_dir="/nzk/special/plugin"
     skill_dir="$plugin_dir/skills/manage-models"
-    mkdir -p "$skill_dir"
+    create_sticky_dir "$skill_dir"
 
     # Build a dynamic model list for the skill instructions
     model_list=""
@@ -420,7 +486,7 @@ SKILLEOF
 
     # ── Caveman skill: enables /caveman as a slash command ──
     caveman_skill_dir="$plugin_dir/skills/caveman"
-    mkdir -p "$caveman_skill_dir"
+    create_sticky_dir "$caveman_skill_dir"
     cat > "$caveman_skill_dir/SKILL.md" << 'CAVEMANSKILL'
 ---
 name: caveman
@@ -497,7 +563,7 @@ add_model() {
         return 1
     fi
 
-    mkdir -p "$CONFIG_DIR"
+    create_sticky_dir "$CONFIG_DIR"
     slug=$(write_config "$PROVIDER_MODEL" "$PROVIDER_TYPE" "$PROVIDER_BASE_URL" "$PROVIDER_LABEL" "$api_key")
     printf "%s%s%s\n" "${GREEN}  ✓ Added: ${PROVIDER_MODEL} → ${slug}.conf${NC}"
 }
@@ -507,7 +573,7 @@ add_model() {
 # ──────────────────────────────────────────────
 
 setup_api_keys() {
-    mkdir -p "$CONFIG_DIR"
+    create_sticky_dir "$CONFIG_DIR"
 
     if $CONFIG_EXISTS; then
         echo ""
@@ -569,7 +635,7 @@ setup_api_keys() {
 # ──────────────────────────────────────────────
 
 update_keys_only() {
-    mkdir -p "$CONFIG_DIR"
+    create_sticky_dir "$CONFIG_DIR"
     count=$(count_models)
 
     if [ "$count" -eq 0 ]; then
@@ -1026,11 +1092,12 @@ echo "  3) Both — install CLI + configure models"
 echo "  4) Update keys / provider in existing models"
 echo "  5) Install caveman (terse output mode — no key changes)"
 echo "  6) Add /nzk/bin, /nzk/appimage, /nzk/shellscripts, /nzk/executables to PATH (if not already)"
+echo "  7) Enable offline mode (skip GitHub login, use local provider)"
 echo "  q) Quit"
 echo ""
 
 while :; do
-    prompt "Enter your choice [1-6]:" choice
+    prompt "Enter your choice [1-7]:" choice
     case $choice in
         1) install_copilot; break ;;
         2)
@@ -1061,6 +1128,11 @@ while :; do
             ;;
         6)
             show_path_status
+            break
+            ;;
+        7)
+            regenerate_loader
+            setup_offline
             break
             ;;
         q|Q) printf "Bye.\n"; exit 0 ;;
