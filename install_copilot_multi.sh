@@ -13,6 +13,66 @@ FISH_LOADER="/nzk/special/loader.fish"
 FISH_ALIASES="/nzk/special/aliases.fish"
 DEFAULT_LINK="/nzk/special/default.conf"
 
+# ── Parse --users flag for additional users to configure ──
+ADDITIONAL_USERS=""
+for arg in "$@"; do
+    case "$arg" in
+        --users=*)
+            ADDITIONAL_USERS="${arg#--users=}"
+            ;;
+    esac
+done
+
+# ── Apply shell config for a specific user (for --users flag) ──
+apply_for_user() {
+    target_user="$1"
+    target_home=$(eval echo "~$target_user" 2>/dev/null)
+    if [ ! -d "$target_home" ]; then
+        printf "%s%s%s\n" "${YELLOW}  ⚠️  Home for $target_user not found, skipping${NC}"
+        return
+    fi
+    printf "%s%s%s\n" "${GREEN}  ➜ Applying configs for user: ${target_user}${NC}"
+
+    # POSIX configs
+    for cf in ".zshrc" ".bashrc" ".profile"; do
+        cf_path="$target_home/$cf"
+        if [ -f "$cf_path" ]; then
+            sed -i '\|^export PATH="/nzk/bin:\$PATH"$|d' "$cf_path"
+            sed -i '\|^export PATH="/nzk/appimages:\$PATH"$|d' "$cf_path"
+            sed -i '\|^export PATH="/nzk/shellscripts:\$PATH"$|d' "$cf_path"
+            sed -i '\|^export PATH="/nzk/executables:\$PATH"$|d' "$cf_path"
+            # Add PATH if missing from current env
+            path_add=""
+            for dir in "/nzk/bin" "/nzk/appimages" "/nzk/shellscripts" "/nzk/executables"; do
+                case ":${PATH}:" in *:"${dir}":*) ;; *) path_add="${path_add}${dir}:" ;; esac
+            done
+            [ -n "$path_add" ] && printf "export PATH=\"%s\$PATH\"\n" "${path_add%:}" >> "$cf_path"
+            # Add loader source if missing
+            if ! grep -qF "$ALIASES_FILE" "$cf_path" 2>/dev/null; then
+                printf "\n# Copilot loader\n. \"%s\"\n" "$ALIASES_FILE" >> "$cf_path"
+            fi
+            printf "%s%s%s\n" "${GREEN}    ✓ ${cf}${NC}"
+        fi
+    done
+
+    # Fish config
+    fish_dir="$target_home/.config/fish"
+    fish_cfg="$fish_dir/config.fish"
+    if command -v fish >/dev/null 2>&1 || [ -f "$fish_cfg" ]; then
+        mkdir -p "$fish_dir"
+        [ -f "$fish_cfg" ] || touch "$fish_cfg"
+        for dir in "/nzk/bin" "/nzk/appimages" "/nzk/shellscripts" "/nzk/executables"; do
+            if ! grep -qFx "fish_add_path $dir" "$fish_cfg" 2>/dev/null; then
+                printf "fish_add_path %s\n" "$dir" >> "$fish_cfg"
+            fi
+        done
+        if ! grep -qF "$FISH_ALIASES" "$fish_cfg" 2>/dev/null; then
+            printf "\n# Copilot loader\nsource \"%s\"\n" "$FISH_ALIASES" >> "$fish_cfg"
+        fi
+        printf "%s%s%s\n" "${GREEN}    ✓ config.fish${NC}"
+    fi
+}
+
 # ── Create /nzk with sticky bit (create-only, no delete) ──
 create_nzk_root() {
     if [ ! -d "/nzk" ]; then
@@ -1192,3 +1252,15 @@ while :; do
         *) printf "  Invalid choice.\n" ;;
     esac
 done
+
+# ── Apply configs for additional users (--users flag) ──
+if [ -n "$ADDITIONAL_USERS" ]; then
+    echo ""
+    printf "%s%s%s\n" "${YELLOW}👥 Applying configs for additional users: ${ADDITIONAL_USERS}${NC}"
+    old_ifs="$IFS"
+    IFS=","
+    for u in $ADDITIONAL_USERS; do
+        apply_for_user "$u"
+    done
+    IFS="$old_ifs"
+fi
