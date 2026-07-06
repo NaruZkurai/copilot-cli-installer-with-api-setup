@@ -1127,11 +1127,12 @@ echo "  4) Update keys / provider in existing models"
 echo "  5) Install caveman (terse output mode — no key changes)"
 echo "  6) Add /nzk/bin, /nzk/appimage, /nzk/shellscripts, /nzk/executables to PATH (if not already)"
 echo "  7) Enable offline mode (skip GitHub login, use local provider)"
+echo "  8) Disable login prompt (makes copilot stop asking for login)"
 echo "  q) Quit"
 echo ""
 
 while :; do
-    prompt "Enter your choice [1-7]:" choice
+    prompt "Enter your choice [1-8]:" choice
     case $choice in
         1) install_copilot; break ;;
         2)
@@ -1167,6 +1168,12 @@ while :; do
         7)
             regenerate_loader
             setup_offline
+            break
+            ;;
+        8)
+            regenerate_loader
+            setup_offline
+            printf "%s%s%s\n" "${GREEN}  ✓ Login prompt disabled. Copilot will no longer ask for login.${NC}"
             break
             ;;
         q|Q) printf "Bye.\n"; exit 0 ;;
